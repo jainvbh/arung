@@ -2,11 +2,13 @@ package hello;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import model.Measurements;
 import model.Metrics;
+import model.StatsRequest;
+import model.StatsResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,16 +26,7 @@ public class MeasurementController {
     @Autowired
     private MeasurementService measurementService;
 
-    private static final String template = "Hello, %s!";
-    private final AtomicLong counter = new AtomicLong();
-
-    @RequestMapping("/greeting")
-    public Greeting greeting(@RequestParam(value="name", defaultValue="World") String name) {
-        return new Greeting(counter.incrementAndGet(),
-                String.format(template, name));
-    }
-
-
+    //Create Measurement
     @RequestMapping(method = RequestMethod.POST, value = "/measurements", consumes = "application/json")
     public ResponseEntity createMeasurement(@RequestBody JsonNode measurement,
                                             HttpServletRequest httpServletRequest) {
@@ -72,6 +65,7 @@ public class MeasurementController {
     }
 
     // features/01-measurements/02-get-measurement.feature
+    //GET by timestamp
     @RequestMapping(value = "/measurements/{timestamp}", method = RequestMethod.GET)
     public ResponseEntity getMeasurement(@PathVariable("timestamp") String timestamp) {
 
@@ -88,7 +82,7 @@ public class MeasurementController {
         }
         *//*
 
-        *//* Example 2:
+         *//* Example 2:
         timestamp := "2015-09-01"
         return [
             {
@@ -115,10 +109,12 @@ public class MeasurementController {
         return resp;
     }
 
-    /*// features/01-measurements/03-update-measurement.feature
-    @PUT @Path("/measurements/{timestamp}")
-    public Response replaceMeasurement(@PathParam("timestamp") String timestamp, JsonNode measurement) {
-        *//* Example:
+    // features/01-measurements/03-update-measurement.feature
+    //@PUT @Path("/measurements/{timestamp}")
+    //REPLACE by time stamp
+    @RequestMapping(value = "/measurements/{timestamp}", method = RequestMethod.PUT)
+    public ResponseEntity replaceMeasurement(@PathVariable("timestamp") String timestamp, @RequestBody JsonNode measurement) {
+        /* Example:
         timestamp := "2015-09-01T16:20:00.000Z"
         measurement := {
             "timestamp": "2015-09-01T16:00:00.000Z",
@@ -126,9 +122,11 @@ public class MeasurementController {
             "dewPoint": 16.7,
             "precipitation": 0
         }
-        *//*
+        */
 
-        int status;
+        int httpStatusCode = 0;
+        ResponseEntity resp = null;
+
 
         if(isRequestValid(measurement)) {
             String newtimestamp = measurement.get("timestamp").asText();
@@ -139,29 +137,32 @@ public class MeasurementController {
                         measurement.get("precipitation").floatValue()
                 );
 
-                status = measurementService.updateMeasurement(timestamp, metric);
+                httpStatusCode = measurementService.updateMeasurement(timestamp, metric);
             } else {
-                status = 409;
+                httpStatusCode = 409;
             }
         } else {
-            status = 400;
+            httpStatusCode = 400;
         }
 
-        return Response.status(status).build();
+        HttpStatus httpStatus = getHttpStatus(httpStatusCode);
+
+        return new ResponseEntity(httpStatus);
     }
 
-    // features/01-measurements/03-update-measurement.feature
-    @PATCH @Path("/measurements/{timestamp}")
-    public Response updateMeasurement(@PathParam("timestamp") String timestamp, JsonNode measurement) {
-        *//* Example:
+
+    //Update API
+    @RequestMapping(value = "/measurements/{timestamp}", method = RequestMethod.PATCH)
+    public ResponseEntity updateMeasurement(@PathVariable("timestamp") String timestamp, @RequestBody JsonNode measurement) {
+        /* Example:
         timestamp := "2015-09-01T16:20:00.000Z"
         measurement := {
             "timestamp": "2015-09-01T16:00:00.000Z",
             "precipitation": 15.2
         }
-        *//*
+        */
 
-        int status;
+        int httpStatusCode;
         boolean isValidRequest = true;
         if(measurement.get("temperature") != null) {
             isValidRequest = isValidRequest && isFloatCheck(measurement.get("temperature").asText());
@@ -182,41 +183,48 @@ public class MeasurementController {
                         convertNullToFloat(measurement.get("precipitation"))
                 );
 
-                status = measurementService.patchMeasurement(timestamp, metric);
+                httpStatusCode = measurementService.patchMeasurement(timestamp, metric);
             } else {
-                status = 409;
+                httpStatusCode = 409;
             }
         } else {
-            status = 400;
+            httpStatusCode = 400;
         }
 
-        return Response.status(status).build();
+        HttpStatus httpStatus = getHttpStatus(httpStatusCode);
+
+        return new ResponseEntity(httpStatus);
     }
 
     // features/01-measurements/04-delete-measurement.feature
-    @DELETE @Path("/measurements/{timestamp}")
-    public Response deleteMeasurement(@PathParam("timestamp") String timestamp) {
-        *//* Example:
+    //@DELETE @Path("/measurements/{timestamp}")
+    @RequestMapping(value = "/measurements/{timestamp}", method = RequestMethod.DELETE)
+    public ResponseEntity deleteMeasurement(@PathVariable("timestamp") String timestamp) {
+        /* Example:
         timestamp := "2015-09-01T16:20:00.000Z"
-        *//*
-
+        */
         Metrics result = measurementService.deleteMeasurement(timestamp);
-        int status = 0;
+        int httpStatusCode = 0;
         if(result != null) {
-            status = 204;
+            httpStatusCode = 204;
         } else {
-            status = 404;
+            httpStatusCode = 404;
         }
-        return Response.status(status).build();
+
+        HttpStatus httpStatus = getHttpStatus(httpStatusCode);
+
+
+        return new ResponseEntity(httpStatus);
     }
 
-    @GET @Path("/stats")
-    public Response getStats(@QueryParam("metric") List<String> metrics,
-                             @QueryParam("stat") List<String> stats,
-                             @QueryParam("fromDateTime") String fromDateTime,
-                             @QueryParam("toDateTime") String toDateTime
+    //@GET @Path("/stats")
+    @RequestMapping(value = "/stats", method = RequestMethod.GET)
+    public ResponseEntity getStats(@RequestParam("metric") List<String> metrics,
+                                   @RequestParam("stat") List<String> stats,
+                                   @RequestParam("fromDateTime") String fromDateTime,
+                                   @RequestParam("toDateTime") String toDateTime
     ) {
-        *//* Example:
+        /* Example:
         metrics := [
             "temperature",
             "dewPoint"
@@ -247,14 +255,16 @@ public class MeasurementController {
                 "value": 17.3
             }
         ]
-        *//*
+        */
+
         System.out.println("To Date Time " + toDateTime);
         LocalDateTime fromDateLt = WeatherTrackerUtil.convertStringToLocalDate(fromDateTime);
         LocalDateTime toDateLt = WeatherTrackerUtil.convertStringToLocalDate(toDateTime);
         StatsRequest request = new StatsRequest(new ArrayList<>(metrics), new ArrayList<>(stats), fromDateLt, toDateLt);
         ArrayList<StatsResponse> response = measurementService.getMeasurementStatistics(request);
-        return Response.status(200).entity(response).build();
-    }*/
+
+        return new ResponseEntity(response, HttpStatus.OK);
+    }
 
 
     private boolean isFloatCheck(String str) {
@@ -288,4 +298,19 @@ public class MeasurementController {
                 isFloatCheck(measurement.get("dewPoint").asText()) &&
                 isFloatCheck(measurement.get("precipitation").asText());
     }
+
+    private HttpStatus getHttpStatus(int httpStatusCode) {
+        HttpStatus httpStatus = null;
+        if (httpStatusCode == 204) {
+            httpStatus = HttpStatus.NO_CONTENT;
+        } else if (httpStatusCode == 404) {
+            httpStatus = HttpStatus.NOT_FOUND;
+        } else if (httpStatusCode == 409) {
+            httpStatus = HttpStatus.CONFLICT;
+        } else if (httpStatusCode == 400) {
+            httpStatus = HttpStatus.BAD_REQUEST;
+        }
+        return httpStatus;
+    }
+
 }
